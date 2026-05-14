@@ -1,0 +1,5 @@
+__pycache__/
+datasets/
+model/train/
+model/valid/
+model/test/
