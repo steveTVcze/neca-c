@@ -5,7 +5,7 @@ export default function Header() {
   return (
     <header style={styles.header}>
       <Recycle size={32} color="#10B981" />
-      <h1 style={styles.title}>Smart Circular Workwear</h1>
+      <h1 style={styles.title}>NEXA C</h1>
       <span style={styles.badge}>Beta 0.1</span>
     </header>
   );
