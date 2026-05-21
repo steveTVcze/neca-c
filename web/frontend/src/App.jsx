@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, LoaderCircle, Sun, Moon } from 'lucide-react';
+import { LoaderCircle, Sun, Moon, Smartphone } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
 import nexaLogo from './assets/nexa_c_no_bg.svg'; 
 
-// --- FIX PRO ZOBRAZENÍ ZÁKLADNÍCH MODRÝCH IKONEK VE VITE ---
+const BACKEND_URL = "https://eradicate-calculate-mountain.ngrok-free.dev"; 
+
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -14,7 +15,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// --- SPECIÁLNÍ ČERVENÁ IKONKA PRO TVOU POLOHU ---
 const userIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
@@ -25,25 +25,10 @@ const userIcon = new L.Icon({
 });
 
 const themes = {
-  light: {
-    bg: '#F3F4F6',
-    card: '#FFFFFF',
-    textTitle: '#111827',
-    textBody: '#4B5563',
-    border: '#E5E7EB',
-    headerBg: 'rgba(255, 255, 255, 0.8)',
-  },
-  dark: {
-    bg: '#0F172A', 
-    card: '#1E293B',
-    textTitle: '#F9FAFB',
-    textBody: '#94A3B8',
-    border: '#334155',
-    headerBg: 'rgba(15, 23, 42, 0.8)',
-  }
+  light: { bg: '#F3F4F6', card: '#FFFFFF', textTitle: '#111827', textBody: '#4B5563', border: '#E5E7EB', headerBg: 'rgba(255, 255, 255, 0.8)' },
+  dark: { bg: '#0F172A', card: '#1E293B', textTitle: '#F9FAFB', textBody: '#94A3B8', border: '#334155', headerBg: 'rgba(15, 23, 42, 0.8)' }
 };
 
-// --- KOMPONENTA PRO B2B PORTÁL ---
 function B2BPortal({ theme, onBack }) {
   const [formData, setFormData] = useState({ name: '', tier: 'Alliance', discount: '' });
   const [submitted, setSubmitted] = useState(false);
@@ -51,7 +36,6 @@ function B2BPortal({ theme, onBack }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const BACKEND_URL = "http://172.31.131.20:8000"; 
       await fetch(`${BACKEND_URL}/partners`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -105,7 +89,6 @@ function B2BPortal({ theme, onBack }) {
   );
 }
 
-// --- KOMPONENTA PRO ZOBRAZENÍ PLATÍCÍCH PARTNERŮ ---
 function PartnerRecommendations({ actionType, theme }) {
   const partners = actionType === 'repair' ? [
     { id: 1, name: "EcoTailor Hämeenlinna", tier: "VIP", badge: "⭐ VIP Partner", discount: null, desc: "Puts company first in the list" },
@@ -147,7 +130,7 @@ function PartnerRecommendations({ actionType, theme }) {
                   {partner.badge}
                 </span>
               </div>
-              <p style={{ margin: 0, fontSize: '13px', color: partner.tier === 'VIP' ? '#F59E0B' : theme.textBody }}>
+              <p style={{ margin: '0', fontSize: '13px', color: partner.tier === 'VIP' ? '#F59E0B' : theme.textBody }}>
                 {partner.discount ? `🎁 ${partner.discount}` : partner.desc}
               </p>
             </div>
@@ -170,14 +153,17 @@ function PartnerRecommendations({ actionType, theme }) {
   );
 }
 
-// --- HLAVNÍ APLIKACE ---
 export default function App() {
   const [darkMode, setDarkMode] = useState(localStorage.getItem('theme') === 'dark');
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [currentView, setCurrentView] = useState('user');
+  
+  const [step, setStep] = useState(1); 
+  const [frontImage, setFrontImage] = useState(null);
+  const [backImage, setBackImage] = useState(null);
+  
   const [defectsCount, setDefectsCount] = useState(null);
   const [itemId, setItemId] = useState(null);
-  const [currentView, setCurrentView] = useState('user');
+  const [aiResultImageUrls, setAiResultImageUrls] = useState([]);
 
   const theme = darkMode ? themes.dark : themes.light;
 
@@ -186,16 +172,16 @@ export default function App() {
     document.body.style.backgroundColor = theme.bg; 
   }, [darkMode, theme.bg]);
 
-  const handleImageSelect = async (file, imageUrl) => {
-    setSelectedImage(imageUrl);
-    setIsAnalyzing(true);
-    setDefectsCount(null);
+  const handleStartAnalysis = async () => {
+    if (!frontImage || !backImage) return alert("Please upload both front and back photos.");
+    
+    setStep(2); 
 
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("files", frontImage.file);
+    formData.append("files", backImage.file);
 
     try {
-      const BACKEND_URL = "http://172.31.131.20:8000"; 
       const response = await fetch(`${BACKEND_URL}/analyze`, {
         method: "POST",
         body: formData,
@@ -204,12 +190,26 @@ export default function App() {
       const data = await response.json();
       setDefectsCount(data.total_defects);
       setItemId(data.item_id);
+      setAiResultImageUrls(data.result_image_urls || []);
+      setStep(3); 
     } catch (error) {
       alert("NEXA AI Connection Error. Check Backend.");
-      setSelectedImage(null);
-    } finally {
-      setIsAnalyzing(false);
+      setStep(1); 
     }
+  };
+
+  const resetFlow = () => {
+    setStep(1);
+    setFrontImage(null);
+    setBackImage(null);
+    setDefectsCount(null);
+    setItemId(null);
+    setAiResultImageUrls([]);
+  };
+
+  const resetToHome = () => {
+    setCurrentView('user');
+    resetFlow();
   };
 
   const styles = {
@@ -223,22 +223,13 @@ export default function App() {
     <div style={styles.app}>
       <header style={styles.header}>
         <div style={{ ...styles.container, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px' }}>
-          
           <img 
             src={nexaLogo} 
             alt="NEXA Logo" 
-            style={{ 
-              height: '45px', 
-              width: 'auto',
-              filter: darkMode ? 'brightness(0) invert(1)' : 'none',
-              transition: 'filter 0.3s ease'
-            }} 
+            onClick={resetToHome}
+            style={{ height: '45px', width: 'auto', filter: darkMode ? 'brightness(0) invert(1)' : 'none', transition: 'filter 0.3s ease', cursor: 'pointer' }} 
           />
-
-          <button 
-            onClick={() => setDarkMode(!darkMode)} 
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: theme.textTitle }}
-          >
+          <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: theme.textTitle }}>
             {darkMode ? <Sun size={24} /> : <Moon size={24} />}
           </button>
         </div>
@@ -249,50 +240,71 @@ export default function App() {
           <B2BPortal theme={theme} onBack={() => setCurrentView('user')} />
         ) : (
           <>
-            {!selectedImage && (
+            {step === 1 && (
               <div style={styles.card}>
-                <div style={{ border: `2px dashed ${theme.border}`, borderRadius: '15px', padding: '60px', textAlign: 'center' }}>
-                  <UploadCloud size={60} color={theme.textBody} style={{ marginBottom: '20px' }} />
-                  <h2 style={{ color: theme.textTitle }}>Analyze your workwear</h2>
-                  <p style={{ color: theme.textBody, marginBottom: '30px' }}>Our AI scans for holes, stains and wear.</p>
-                  
-                  <input type="file" accept="image/*" onChange={(e) => handleImageSelect(e.target.files[0], URL.createObjectURL(e.target.files[0]))} style={{ display: 'none' }} id="file-upload" />
-                  <label htmlFor="file-upload" style={{ backgroundColor: '#2563EB', color: 'white', padding: '14px 28px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-block' }}>
-                    Upload Photo
-                  </label>
+                <h2 style={{ color: theme.textTitle, marginTop: 0, textAlign: 'center' }}>Scan your item</h2>
+                <p style={{ color: theme.textBody, marginBottom: '30px', textAlign: 'center' }}>For accurate AI analysis, we need a photo of both the front and the back. Lay the item flat in good lighting.</p>
+                
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '30px' }}>
+                  <div style={{ flex: '1 1 300px', border: `2px dashed ${frontImage ? '#10B981' : theme.border}`, borderRadius: '15px', padding: '30px', textAlign: 'center', backgroundColor: theme.bg }}>
+                    <strong style={{ display: 'block', color: theme.textTitle, marginBottom: '10px' }}>FRONT VIEW</strong>
+                    {frontImage ? (
+                      <img src={frontImage.url} alt="Front" style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', borderRadius: '10px' }} />
+                    ) : (
+                      <>
+                        <Smartphone size={40} color={theme.textBody} style={{ margin: '20px 0' }} />
+                        <input type="file" accept="image/*" onChange={(e) => setFrontImage({ file: e.target.files[0], url: URL.createObjectURL(e.target.files[0]) })} style={{ display: 'none' }} id="front-upload" />
+                        <label htmlFor="front-upload" style={{ backgroundColor: '#2563EB', color: 'white', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-block' }}>Take Photo</label>
+                      </>
+                    )}
+                  </div>
+
+                  <div style={{ flex: '1 1 300px', border: `2px dashed ${backImage ? '#10B981' : theme.border}`, borderRadius: '15px', padding: '30px', textAlign: 'center', backgroundColor: theme.bg }}>
+                    <strong style={{ display: 'block', color: theme.textTitle, marginBottom: '10px' }}>BACK VIEW</strong>
+                    {backImage ? (
+                      <img src={backImage.url} alt="Back" style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', borderRadius: '10px' }} />
+                    ) : (
+                      <>
+                        <Smartphone size={40} color={theme.textBody} style={{ margin: '20px 0' }} />
+                        <input type="file" accept="image/*" onChange={(e) => setBackImage({ file: e.target.files[0], url: URL.createObjectURL(e.target.files[0]) })} style={{ display: 'none' }} id="back-upload" />
+                        <label htmlFor="back-upload" style={{ backgroundColor: '#2563EB', color: 'white', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-block' }}>Take Photo</label>
+                      </>
+                    )}
+                  </div>
                 </div>
+
+                <button 
+                  onClick={handleStartAnalysis} 
+                  disabled={!frontImage || !backImage}
+                  style={{ width: '100%', backgroundColor: (frontImage && backImage) ? '#2563EB' : theme.border, color: (frontImage && backImage) ? 'white' : theme.textBody, padding: '16px', borderRadius: '12px', border: 'none', fontWeight: 'bold', fontSize: '18px', cursor: (frontImage && backImage) ? 'pointer' : 'not-allowed' }}
+                >
+                  Analyze Both Sides
+                </button>
               </div>
             )}
 
-            {isAnalyzing && (
+            {step === 2 && (
               <div style={{ ...styles.card, textAlign: 'center', padding: '80px' }}>
                 <LoaderCircle size={50} color="#2563EB" className="spin-animation" />
                 <h2 style={{ color: theme.textTitle, marginTop: '20px' }}>AI NEXA is scanning...</h2>
-                <style>{`
-                  @keyframes spin { 100% { transform: rotate(360deg); } }
-                  .spin-animation { animation: spin 1s linear infinite; }
-                `}</style>
+                <p style={{ color: theme.textBody }}>Analyzing both sides for holes, stains and wear.</p>
+                <style>{`@keyframes spin { 100% { transform: rotate(360deg); } } .spin-animation { animation: spin 1s linear infinite; }`}</style>
               </div>
             )}
 
-            {!isAnalyzing && selectedImage && defectsCount !== null && (
+            {step === 3 && (
               <ResultCard 
-                imageUrl={selectedImage} 
+                aiImageUrls={aiResultImageUrls} 
                 defectsCount={defectsCount} 
                 itemId={itemId} 
                 theme={theme} 
-                onRestart={() => { 
-                  setSelectedImage(null); 
-                  setDefectsCount(null); 
-                  setItemId(null);
-                }} 
+                onRestart={resetFlow} 
               />
             )}
           </>
         )}
       </main>
 
-      {/* PATIČKA S B2B PŘEPÍNAČEM */}
       <footer style={{ marginTop: 'auto', textAlign: 'center', padding: '20px', fontSize: '14px', color: theme.textBody, borderTop: `1px solid ${theme.border}`, backgroundColor: theme.headerBg }}>
         © 2026 NEXA Circular Solutions. Hämeenlinna, Finland. <br/>
         {currentView === 'user' && (
@@ -305,62 +317,100 @@ export default function App() {
   );
 }
 
-// --- VÝSLEDKOVÁ KARTA ---
-function ResultCard({ imageUrl, defectsCount, itemId, theme, onRestart }) {
+function ResultCard({ aiImageUrls, defectsCount, itemId, theme, onRestart }) {
+  const isRepair = defectsCount > 0 && defectsCount <= 2;
   const isRecycle = defectsCount > 2;
-  const color = defectsCount === 0 ? '#10B981' : (defectsCount <= 2 ? '#F59E0B' : '#EF4444');
-  const label = defectsCount === 0 ? 'NEXA REUSE' : (defectsCount <= 2 ? 'NEXA REPAIR' : 'NEXA RECYCLE');
+  
+  const color = defectsCount === 0 ? '#10B981' : (isRepair ? '#F59E0B' : '#EF4444');
+  const label = defectsCount === 0 ? 'NEXA REUSE' : (isRepair ? 'NEXA REPAIR' : 'NEXA RECYCLE');
 
   return (
     <>
       <div style={{ backgroundColor: theme.card, borderRadius: '20px', border: `1px solid ${theme.border}`, padding: '25px', display: 'flex', gap: '25px', flexWrap: 'wrap' }}>
-        <img src={imageUrl} alt="Analysis" style={{ flex: '1 1 300px', borderRadius: '15px', maxHeight: '400px', objectFit: 'cover' }} />
+        
+        <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          {aiImageUrls.map((url, idx) => (
+            <div key={idx} style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', top: '10px', left: '10px', backgroundColor: 'rgba(0,0,0,0.7)', color: 'white', padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', zIndex: 10 }}>
+                {idx === 0 ? 'FRONT SCAN' : 'BACK SCAN'}
+              </span>
+              <NgrokImage 
+                src={`${BACKEND_URL}${url}`} 
+                alt={`AI Scan ${idx}`} 
+                style={{ width: '100%', borderRadius: '15px', objectFit: 'cover', border: `1px solid ${theme.border}`, minHeight: '200px' }} 
+              />
+              
+            </div>
+          ))}
+        </div>
         
         <div style={{ flex: '1 1 300px' }}>
           <h3 style={{ color: theme.textBody, fontSize: '14px', textTransform: 'uppercase' }}>Analysis Result</h3>
           <h2 style={{ color: color, fontSize: '32px', fontWeight: '900', margin: '10px 0' }}>{label}</h2>
           <p style={{ color: theme.textBody, lineHeight: 1.6, marginBottom: '20px' }}>
-            {defectsCount === 0 ? "Perfect condition. Item can be sanitized and reused." : 
-             (defectsCount <= 2 ? `Found ${defectsCount} minor defects. Suitable for repair.` : `Found ${defectsCount} defects. Item must be recycled.`)}
+            {defectsCount === 0 ? "Perfect condition on both sides. Item can be sanitized and reused." : 
+             (isRepair ? `Found total of ${defectsCount} minor defects across the item. Suitable for repair.` : `Found total of ${defectsCount} defects. Item must be recycled.`)}
           </p>
           
-          {/* PLATÍCÍ PARTNEŘI SE UKÁŽOU, POKUD JE POTŘEBA OPRAVA NEBO RECYKLACE */}
           {(defectsCount > 0) && (
-            <PartnerRecommendations actionType={defectsCount <= 2 ? 'repair' : 'recycle'} theme={theme} />
+            <PartnerRecommendations actionType={isRepair ? 'repair' : 'recycle'} theme={theme} />
           )}
 
-          {/* QR KÓD PŘES BEZPEČNÉ API */}
           {itemId && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginTop: '20px', padding: '15px', backgroundColor: theme.bg, borderRadius: '10px', border: `1px solid ${theme.border}` }}>
-              <div style={{ padding: '8px', backgroundColor: 'white', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=128x128&data=${itemId}`} 
-                  alt="QR Code" 
-                  style={{ width: '64px', height: '64px' }} 
-                />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginTop: '20px', padding: '20px', backgroundColor: theme.bg, borderRadius: '12px', border: `1px solid ${theme.border}` }}>
+              <div style={{ padding: '10px', backgroundColor: 'white', borderRadius: '10px', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${itemId}`} alt="QR Code" style={{ width: '130px', height: '130px' }} />
               </div>
-              <div>
-                <strong style={{ display: 'block', color: theme.textTitle, fontSize: '12px', textTransform: 'uppercase' }}>Digital Passport ID</strong>
-                <span style={{ color: theme.textBody, fontFamily: 'monospace', fontSize: '14px' }}>{itemId.split('-')[0].toUpperCase()}</span>
+              <div style={{ flex: 1 }}>
+                <strong style={{ display: 'block', color: theme.textTitle, fontSize: '14px', textTransform: 'uppercase', marginBottom: '8px' }}>Digital Passport ID</strong>
+                <span style={{ display: 'block', color: theme.textBody, fontFamily: 'monospace', fontSize: '18px', backgroundColor: theme.card, padding: '8px', borderRadius: '6px', border: `1px solid ${theme.border}` }}>
+                  {itemId.split('-')[0].toUpperCase()}
+                </span>
+                <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: theme.textBody }}>Scan to track item history.</p>
               </div>
             </div>
           )}
 
-          {isRecycle && <RecycleMap theme={theme} />}
+          {(isRecycle || isRepair) && <ActionMap type={isRepair ? 'repair' : 'recycle'} theme={theme} />}
         </div>
       </div>
       <button onClick={onRestart} style={{ width: '100%', marginTop: '20px', padding: '15px', borderRadius: '15px', border: 'none', backgroundColor: theme.border, color: theme.textTitle, fontWeight: 'bold', cursor: 'pointer' }}>
-        New Analysis
+        Start New Analysis
       </button>
     </>
   );
 }
 
-// --- DYNAMICKÁ MAPA (Se záchrannou lokací) ---
-function RecycleMap({ theme }) {
+function NgrokImage({ src, alt, style }) {
+  const [imgBlob, setImgBlob] = useState(null);
+
+  useEffect(() => {
+    fetch(src, {
+      headers: { "ngrok-skip-browser-warning": "69420" }
+    })
+      .then(res => res.blob())
+      .then(blob => setImgBlob(URL.createObjectURL(blob)))
+      .catch(err => console.error("Error loading image:", err));
+  }, [src]);
+
+  if (!imgBlob) {
+    return (
+      <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#E5E7EB', color: '#6B7280' }}>
+        <LoaderCircle size={24} className="spin-animation" style={{ marginRight: '10px' }} />
+        Loading AI Scan...
+      </div>
+    );
+  }
+
+  return <img src={imgBlob} alt={alt} style={style} />;
+}
+
+function ActionMap({ type, theme }) {
   const [userLocation, setUserLocation] = useState(null);
   const [spots, setSpots] = useState([]);
   const [status, setStatus] = useState("Locating you...");
+
+  const mapTitle = type === 'repair' ? "📍 Nearest Tailors & Repair Shops" : "📍 Nearest Drop-off Points";
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -373,31 +423,37 @@ function RecycleMap({ theme }) {
         const lat = position.coords.latitude;
         const lon = position.coords.longitude;
         setUserLocation([lat, lon]);
-        setStatus("Searching for nearest recycling spots...");
-        fetchRecyclingSpots(lat, lon);
+        setStatus(`Searching for nearest ${type === 'repair' ? 'tailors' : 'recycling spots'}...`);
+        fetchSpots(lat, lon);
       },
       (error) => {
-        console.warn("Poloha zablokována, používám záložní lokaci.");
+        console.warn("Poloha zablokována, používám záložní lokaci Hämeenlinna.");
         const fallbackLat = 60.995;
         const fallbackLon = 24.46;
-        
         setUserLocation([fallbackLat, fallbackLon]);
-        setStatus("Using default location (Hämeenlinna)...");
-        fetchRecyclingSpots(fallbackLat, fallbackLon);
+        setStatus(`Using default location (Hämeenlinna)... searching for ${type === 'repair' ? 'tailors' : 'recycling spots'}...`);
+        fetchSpots(fallbackLat, fallbackLon);
       }
     );
-  }, []);
+  }, [type]);
 
-  const fetchRecyclingSpots = async (lat, lon) => {
-    const query = `
-      [out:json];
-      (
+  const fetchSpots = async (lat, lon) => {
+    let osmTags = "";
+    if (type === 'repair') {
+      osmTags = `
+        node["craft"="tailor"](around:5000, ${lat}, ${lon});
+        node["shop"="tailor"](around:5000, ${lat}, ${lon});
+        node["shop"="clothes_repair"](around:5000, ${lat}, ${lon});
+      `;
+    } else {
+      osmTags = `
         node["amenity"="recycling"]["recycling:clothes"="yes"](around:3000, ${lat}, ${lon});
         node["shop"="charity"](around:3000, ${lat}, ${lon});
         node["shop"="second_hand"](around:3000, ${lat}, ${lon});
-      );
-      out;
-    `;
+      `;
+    }
+
+    const query = `[out:json];(${osmTags});out;`;
 
     try {
       const response = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
@@ -407,59 +463,39 @@ function RecycleMap({ theme }) {
         id: el.id,
         lat: el.lat,
         lon: el.lon,
-        name: el.tags.name || el.tags.operator || "Textile Recycling Bin",
+        name: el.tags.name || el.tags.operator || (type === 'repair' ? "Local Tailor" : "Textile Recycling Bin"),
       }));
 
       setSpots(foundSpots);
-      setStatus(foundSpots.length > 0 ? "" : "No recycling spots found within 3 km.");
+      setStatus(foundSpots.length > 0 ? "" : `No ${type === 'repair' ? 'tailors' : 'recycling spots'} found nearby.`);
     } catch (error) {
       setStatus("Error while fetching map data.");
     }
   };
 
   return (
-    <div style={{ marginTop: '20px', padding: '15px', backgroundColor: theme.bg, borderRadius: '15px', border: `1px solid ${theme.border}` }}>
-      <h4 style={{ color: theme.textTitle, margin: '0 0 12px 0' }}>📍 Nearest Drop-off Points</h4>
+    <div style={{ marginTop: '24px', padding: '16px', backgroundColor: theme.bg, borderRadius: '12px', border: `1px solid ${theme.border}` }}>
+      <h3 style={{ marginTop: 0, marginBottom: '16px', color: theme.textTitle, fontSize: '18px' }}>{mapTitle}</h3>
 
-      {status && <p style={{ color: theme.textBody, fontSize: '14px', fontStyle: 'italic', margin: '0 0 12px 0' }}>{status}</p>}
+      {status && <p style={{ color: theme.textBody, fontStyle: 'italic', marginBottom: '12px' }}>{status}</p>}
 
       {userLocation && (
-        <MapContainer center={userLocation} zoom={13} style={{ height: '300px', width: '100%', borderRadius: '10px', zIndex: 1 }}>
+        <MapContainer center={userLocation} zoom={13} style={{ height: '350px', width: '100%', borderRadius: '8px', zIndex: 1 }}>
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           />
-          
           <Marker position={userLocation} icon={userIcon}>
-            <Popup>
-              <strong style={{ color: '#111827' }}>You are here 📍</strong>
-            </Popup>
+            <Popup><strong style={{ color: '#111827' }}>You are here 📍</strong></Popup>
           </Marker>
 
           {spots.map((spot) => {
-            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=$${spot.lat},${spot.lon}`;
-            
+            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${spot.lat},${spot.lon}`;
             return (
               <Marker key={spot.id} position={[spot.lat, spot.lon]}>
                 <Popup>
                   <strong style={{ display: 'block', marginBottom: '8px', color: '#111827' }}>{spot.name}</strong>
-                  
-                  <a 
-                    href={googleMapsUrl} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    style={{
-                      display: 'inline-block',
-                      backgroundColor: '#2563EB',
-                      color: 'white',
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      textDecoration: 'none',
-                      fontWeight: 'bold',
-                      fontSize: '13px',
-                      textAlign: 'center'
-                    }}
-                  >
+                  <a href={googleMapsUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block', backgroundColor: '#2563EB', color: 'white', padding: '6px 12px', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold', fontSize: '14px', textAlign: 'center' }}>
                     🗺️ Navigate here
                   </a>
                 </Popup>
