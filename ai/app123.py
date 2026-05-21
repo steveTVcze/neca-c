@@ -4,7 +4,7 @@ import cv2
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-MODEL_PATH = os.path.join(BASE_DIR, "best.pt")
+MODEL_PATH = os.path.join(BASE_DIR, "best123.pt")
 OUTPUT_DIR = os.path.join(BASE_DIR, "my_results")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
