@@ -1,11 +1,7 @@
 from ultralytics import YOLO
 import os
 
-model_path = './ai/runs/detect/train-2/weights/best.pt'
-
-if not os.path.exists('./ai/test3.jpg'):
-    print("CHYBA: Soubor test.jpg ve složce neexistuje!")
-else:
-    model = YOLO(model_path)
-    results = model.predict('./ai/test3.jpg', save=True)
-    print("HOTOVO! Koukni do složky runs/detect/predict")
+model_path = './ai/best123.pt'
+model = YOLO(model_path)
+results = model.predict('./ai/test3.jpg', save=True)
+print("HOTOVO! Koukni do složky runs/detect/predict")
